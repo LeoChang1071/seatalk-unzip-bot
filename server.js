@@ -66,8 +66,10 @@ app.post('/', async (req, res) => {
   const zipUrl = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`;
 
   try {
-    console.log("📤 呼叫 Apps Script 中，網址為:", zipUrl);
+    console.log("📤 呼叫 Apps Script URL:", APPS_SCRIPT_URL);
+    console.log("📦 傳送的 zip URL:", zipUrl);
     const apiRes = await axios.post(APPS_SCRIPT_URL, { url: zipUrl });
+    console.log("📥 回傳結果：", apiRes.data);
     const folderUrl = apiRes.data.folderUrl || '無法取得資料夾';
     await replyTo(body.event, `✅ 解壓完成！請點擊：\n${folderUrl}`);
   } catch (err) {
