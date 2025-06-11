@@ -1,36 +1,34 @@
+// server.js
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const crypto = require('crypto');
-
 const app = express();
 app.use(express.json());
 
 const APP_ID = process.env.SEATALK_APP_ID;
 const APP_SECRET = process.env.SEATALK_APP_SECRET;
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
-const SIGNING_SECRET = process.env.SEATALK_SIGNING_SECRET;
 
 let accessToken = null;
 
-// === Access Token 換取 ===
+// 取得 access token
 async function getAccessToken() {
   const res = await axios.post('https://openapi.seatalk.io/oauth2/token', {
     app_id: APP_ID,
     app_secret: APP_SECRET,
-    grant_type: 'client_credentials'
+    grant_type: 'client_credentials',
   });
   accessToken = res.data.access_token;
   return accessToken;
 }
 
-// === 發送訊息 ===
+// 回覆訊息
 async function replyTo(event, content) {
   if (!accessToken) await getAccessToken();
 
   const payload = {
     tag: 'text',
-    text: { content }
+    text: { content },
   };
 
   if (event.conversation_type === 'p2p') {
@@ -40,22 +38,20 @@ async function replyTo(event, content) {
   }
 
   await axios.post('https://openapi.seatalk.io/bot/message/send', payload, {
-    headers: { Authorization: `Bearer ${accessToken}` }
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
 
-// === Webhook Entry Point ===
-app.post('/', async (req, res) => {
+// webhook 路由
+app.post('/webhook', async (req, res) => {
   const body = req.body;
 
-  // ✅ Step 1: 處理驗證請求
+  // 驗證用：回傳 seatalk_challenge
   if (body.event_type === 'event_verification') {
-    const challenge = body.event?.seatalk_challenge;
-    console.log('✅ Verification received. Challenge =', challenge);
-    return res.status(200).json({ seatalk_challenge: challenge });
+    return res.json({ seatalk_challenge: body.event.seatalk_challenge });
   }
 
-  // ✅ Step 2: 處理一般訊息事件
+  // 判斷訊息格式
   const message = body.event?.message?.text?.content;
   if (!message) return res.sendStatus(200);
 
@@ -66,14 +62,11 @@ app.post('/', async (req, res) => {
   const zipUrl = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`;
 
   try {
-    console.log("📤 呼叫 Apps Script URL:", APPS_SCRIPT_URL);
-    console.log("📦 傳送的 zip URL:", zipUrl);
     const apiRes = await axios.post(APPS_SCRIPT_URL, { url: zipUrl });
-    console.log("📥 回傳結果：", apiRes.data);
     const folderUrl = apiRes.data.folderUrl || '無法取得資料夾';
     await replyTo(body.event, `✅ 解壓完成！請點擊：\n${folderUrl}`);
   } catch (err) {
-    console.error('[❌ 解壓錯誤]', err.message);
+    console.error('[解壓錯誤]', err.message);
     await replyTo(body.event, '❌ 解壓失敗，請稍後再試或確認連結是否正確。');
   }
 
@@ -82,5 +75,5 @@ app.post('/', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Seatalk MCP Bot server running on port ${PORT}`);
+  console.log(`✅ Seatalk MCP Bot running on port ${PORT}`);
 });
