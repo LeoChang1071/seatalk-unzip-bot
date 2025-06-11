@@ -4,6 +4,11 @@ const app = express();
 app.use(express.json());
 
 // === 下面填你的設定 ===
+app.get('/webhook', (req, res) => {
+  const challenge = req.query.challenge || 'ok';
+  res.send({ challenge });
+});
+
 const SEATALK_WEBHOOK_URL = 'https://openapi.seatalk.io/webhook/group/fX-Q69KmTgWv3GgUMrHkug';
 const APPS_SCRIPT_API = 'https://script.google.com/a/macros/garena.com/s/AKfycbyH-h-IXe18fqRWdwzzCEWpVwFXMHlNbQd205xoo3ZT7bnGEPwZgkGvYzblg2wS3rDCDw/exec';
 
