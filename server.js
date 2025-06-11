@@ -1,34 +1,36 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const app = express();
+const crypto = require('crypto');
 
+const app = express();
 app.use(express.json());
 
 const APP_ID = process.env.SEATALK_APP_ID;
 const APP_SECRET = process.env.SEATALK_APP_SECRET;
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
+const SIGNING_SECRET = process.env.SEATALK_SIGNING_SECRET;
 
 let accessToken = null;
 
-// ✅ 換 Access Token
+// === Access Token 換取 ===
 async function getAccessToken() {
   const res = await axios.post('https://openapi.seatalk.io/oauth2/token', {
     app_id: APP_ID,
     app_secret: APP_SECRET,
-    grant_type: 'client_credentials',
+    grant_type: 'client_credentials'
   });
   accessToken = res.data.access_token;
   return accessToken;
 }
 
-// ✅ 回傳訊息到 Seatalk 使用者或群組
+// === 發送訊息 ===
 async function replyTo(event, content) {
   if (!accessToken) await getAccessToken();
 
   const payload = {
     tag: 'text',
-    text: { content },
+    text: { content }
   };
 
   if (event.conversation_type === 'p2p') {
@@ -38,20 +40,22 @@ async function replyTo(event, content) {
   }
 
   await axios.post('https://openapi.seatalk.io/bot/message/send', payload, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Authorization: `Bearer ${accessToken}` }
   });
 }
 
-// ✅ webhook handler
-app.post('/webhook', async (req, res) => {
+// === Webhook Entry Point ===
+app.post('/', async (req, res) => {
   const body = req.body;
 
-  // ✅ 驗證用 - 回傳 seatalk_challenge
-  if (body.event_type === 'event_verification' && body.seatalk_challenge) {
-    console.log('✅ Seatalk Challenge Received:', body.seatalk_challenge);
-    return res.json({ seatalk_challenge: body.seatalk_challenge });
+  // ✅ Step 1: 處理驗證請求
+  if (body.event_type === 'event_verification') {
+    const challenge = body.event?.seatalk_challenge;
+    console.log('✅ Verification received. Challenge =', challenge);
+    return res.status(200).json({ seatalk_challenge: challenge });
   }
 
+  // ✅ Step 2: 處理一般訊息事件
   const message = body.event?.message?.text?.content;
   if (!message) return res.sendStatus(200);
 
@@ -63,10 +67,10 @@ app.post('/webhook', async (req, res) => {
 
   try {
     const apiRes = await axios.post(APPS_SCRIPT_URL, { url: zipUrl });
-    const folderUrl = apiRes.data.folderUrl || '⚠️ 無法取得資料夾';
+    const folderUrl = apiRes.data.folderUrl || '無法取得資料夾';
     await replyTo(body.event, `✅ 解壓完成！請點擊：\n${folderUrl}`);
   } catch (err) {
-    console.error('❌ 解壓錯誤:', err.message);
+    console.error('[❌ 解壓錯誤]', err.message);
     await replyTo(body.event, '❌ 解壓失敗，請稍後再試或確認連結是否正確。');
   }
 
@@ -75,5 +79,5 @@ app.post('/webhook', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ MCP Bot server running on port ${PORT}`);
+  console.log(`✅ Seatalk MCP Bot server running on port ${PORT}`);
 });
